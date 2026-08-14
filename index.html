@@ -3,111 +3,73 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Stok Barang AI - TensorFlow.js</title>
-  
-  <!-- 1. IMPORT LIBRARY TENSORFLOW.JS & MODEL COCO-SSD -->
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
-
+  <title>Tes Koneksi Stok Barang</title>
   <style>
-    * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-    body { background-color: #f0f2f5; margin: 0; padding: 20px; color: #333; }
-    .container { max-width: 550px; margin: 0 auto; background: #ffffff; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); }
-    h2 { text-align: center; color: #1a73e8; margin-top: 0; }
-    
-    .card-photo { border: 2px dashed #4285f4; padding: 15px; text-align: center; border-radius: 10px; background: #e8f0fe; margin-bottom: 20px; }
-    .preview-container { position: relative; display: inline-block; max-width: 100%; margin-top: 10px; }
-    .preview-img { max-width: 100%; max-height: 250px; border-radius: 8px; display: none; }
-    
-    .form-group { margin-bottom: 15px; }
-    label { font-weight: 600; display: block; margin-bottom: 6px; font-size: 14px; }
-    input, select, button { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; }
-    
-    .btn-camera { background: #4285f4; color: white; border: none; font-weight: bold; cursor: pointer; margin-bottom: 5px; }
-    .btn-submit { background: #34a853; color: white; border: none; font-weight: bold; font-size: 16px; cursor: pointer; margin-top: 10px; }
-    .btn-submit:disabled { background: #a8dab5; }
-    
-    #statusAI { font-size: 13px; font-weight: bold; margin-top: 8px; color: #1a73e8; }
-    #alert { padding: 12px; border-radius: 6px; font-weight: 600; display: none; margin-bottom: 15px; text-align: center; }
-    .success { background: #d4edda; color: #155724; }
-    .error { background: #f8d7da; color: #721c24; }
+    body { font-family: Arial, sans-serif; padding: 20px; background: #f4f6f9; }
+    .card { max-width: 450px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    select, button, input { width: 100%; padding: 10px; margin-top: 10px; box-sizing: border-box; }
+    button { background: #28a745; color: white; border: none; font-weight: bold; cursor: pointer; }
+    #status { margin-top: 10px; font-weight: bold; color: #007bff; }
   </style>
 </head>
 <body>
 
-<div class="container">
-  <h2>Sistem Stok AI (TensorFlow)</h2>
-  <div id="alert"></div>
+<div class="card">
+  <h2>Cek Stok Barang</h2>
+  <div id="status">⏳ Memuat data dari Google Sheets...</div>
 
-  <!-- AREA PENGUNGGAHAN & AI DETEKSI -->
-  <div class="card-photo">
-    <label>🤖 Deteksi Objek AI Otomatis</label>
-    <p style="font-size: 12px; color: #666; margin: 4px 0 10px 0;">Ambil foto barang untuk dideteksi oleh AI TensorFlow</p>
-    
-    <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display: none;" onchange="prosesDeteksiAI(this)">
-    <button type="button" class="btn-camera" id="btnFoto" onclick="document.getElementById('cameraInput').click()" disabled>Memuat Model AI...</button>
-    
-    <div class="preview-container">
-      <img id="imagePreview" class="preview-img" alt="Preview Foto">
-    </div>
-    <div id="statusAI">⏳ Menyiapkan model TensorFlow.js...</div>
-  </div>
+  <label for="barang">Pilih Barang:</label>
+  <select id="barang">
+    <option value="">-- Menunggu Data --</option>
+  </select>
 
-  <!-- FORM PENGAMBILAN BARANG -->
-  <form id="formPengambilan" onsubmit="submitAmbilBarang(event)">
-    <div class="form-group">
-      <label for="barang">Pilih Barang (Hasil Deteksi AI):</label>
-      <select id="barang" required>
-        <option value="">-- Memuat Stok Barang... --</option>
-      </select>
-    </div>
-
-    <div class="form-group">
-      <label for="nama_peminta">Nama Peminta Barang:</label>
-      <input type="text" id="nama_peminta" placeholder="Masukkan nama Anda" required>
-    </div>
-
-    <div class="form-group">
-      <label for="jumlah">Jumlah Kebutuhan:</label>
-      <input type="number" id="jumlah" min="1" placeholder="Masukkan jumlah" required>
-    </div>
-
-    <button type="submit" id="btnSubmit" class="btn-submit">Proses Pengambilan</button>
-  </form>
+  <button onclick="loadData()">🔄 Refresh Data</button>
 </div>
 
 <script>
- const API_URL = "https://script.google.com/macros/s/AKfycbwDB5l67T_I6Yw3jXv3KYL1dfqi2CaWHwP5tVxVy-L6sKuO0S83mt5nRcIGzZBTIzA9oQ/exec";
+  const API_URL = "https://script.google.com/macros/s/AKfycbwDB5l67T_I6Yw3jXv3KYL1dfqi2CaWHwP5tVxVy-L6sKuO0S83mt5nRcIGzZBTIzA9oQ/exec";
 
-// Callback fungsi yang dipanggil otomatis oleh JSONP
-function handleBarangResponse(data) {
-  globalBarangList = data;
-  let select = document.getElementById('barang');
-  select.innerHTML = '<option value="">-- Pilih Barang --</option>';
+  // Fungsi Callback JSONP
+  function handleBarangData(data) {
+    const select = document.getElementById('barang');
+    const status = document.getElementById('status');
 
-  if (!data || data.length === 0) {
-    select.innerHTML = '<option value="">-- Data Barang Kosong --</option>';
-    return;
+    if (data && data.length > 0) {
+      select.innerHTML = '<option value="">-- Pilih Barang --</option>';
+      data.forEach(item => {
+        let opt = document.createElement('option');
+        opt.value = item.id;
+        opt.text = `${item.nama} (Stok: ${item.stok} ${item.satuan})`;
+        select.appendChild(opt);
+      });
+      status.style.color = "green";
+      status.innerText = `✅ Berhasil memuat ${data.length} barang dari Google Sheets!`;
+    } else {
+      status.style.color = "red";
+      status.innerText = "⚠️ Data di Google Sheets kosong atau tab 'Barang' tidak ditemukan.";
+    }
   }
 
-  data.forEach(item => {
-    let opt = document.createElement('option');
-    opt.value = item.id;
-    opt.text = `${item.nama} (Sisa Stok: ${item.stok} ${item.satuan})`;
-    select.appendChild(opt);
-  });
-}
+  function loadData() {
+    document.getElementById('status').innerText = "⏳ Memuat ulang data...";
+    
+    // Hapus script lama jika ada
+    const oldScript = document.getElementById('jsonp-loader');
+    if (oldScript) oldScript.remove();
 
-// Fungsi load barang menggunakan teknik JSONP (Bebas Kendala CORS)
-function loadDaftarBarang() {
-  const oldScript = document.getElementById('jsonp-script');
-  if (oldScript) oldScript.remove();
+    // Panggil API via JSONP
+    const script = document.createElement('script');
+    script.id = 'jsonp-loader';
+    script.src = API_URL + "?action=getBarang&callback=handleBarangData";
+    script.onerror = function() {
+      document.getElementById('status').style.color = "red";
+      document.getElementById('status').innerText = "❌ Gagal terhubung ke URL Google Apps Script.";
+    };
+    document.body.appendChild(script);
+  }
 
-  const script = document.createElement('script');
-  script.id = 'jsonp-script';
-  script.src = API_URL + "?action=getBarang&callback=handleBarangResponse";
-  document.body.appendChild(script);
-}
+  // Load otomatis saat halaman dibuka
+  window.onload = loadData;
 </script>
 
 </body>
