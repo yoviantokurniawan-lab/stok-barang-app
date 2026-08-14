@@ -3,7 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sistem Manajemen Stok Barang</title>
+  <title>Stok Barang AI - TensorFlow.js</title>
+  
+  <!-- 1. IMPORT LIBRARY TENSORFLOW.JS & MODEL COCO-SSD -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+
   <style>
     * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
     body { background-color: #f0f2f5; margin: 0; padding: 20px; color: #333; }
@@ -11,7 +16,8 @@
     h2 { text-align: center; color: #1a73e8; margin-top: 0; }
     
     .card-photo { border: 2px dashed #4285f4; padding: 15px; text-align: center; border-radius: 10px; background: #e8f0fe; margin-bottom: 20px; }
-    .preview-img { max-width: 100%; height: 180px; object-fit: cover; border-radius: 8px; display: none; margin: 10px auto; }
+    .preview-container { position: relative; display: inline-block; max-width: 100%; margin-top: 10px; }
+    .preview-img { max-width: 100%; max-height: 250px; border-radius: 8px; display: none; }
     
     .form-group { margin-bottom: 15px; }
     label { font-weight: 600; display: block; margin-bottom: 6px; font-size: 14px; }
@@ -21,111 +27,155 @@
     .btn-submit { background: #34a853; color: white; border: none; font-weight: bold; font-size: 16px; cursor: pointer; margin-top: 10px; }
     .btn-submit:disabled { background: #a8dab5; }
     
+    #statusAI { font-size: 13px; font-weight: bold; margin-top: 8px; color: #1a73e8; }
     #alert { padding: 12px; border-radius: 6px; font-weight: 600; display: none; margin-bottom: 15px; text-align: center; }
-    .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-    .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-    
-    .nav-tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #eee; padding-bottom: 10px; }
-    .nav-tab { flex: 1; text-align: center; padding: 10px; cursor: pointer; font-weight: bold; border-radius: 6px; background: #f1f3f4; }
-    .nav-tab.active { background: #1a73e8; color: white; }
+    .success { background: #d4edda; color: #155724; }
+    .error { background: #f8d7da; color: #721c24; }
   </style>
 </head>
 <body>
 
 <div class="container">
-  <h2>Stok Barang Digital</h2>
-
-  <!-- Tab Navigasi -->
-  <div class="nav-tabs">
-    <div class="nav-tab active" onclick="switchTab('user')">📦 Ambil Barang</div>
-    <div class="nav-tab" onclick="switchTab('admin')">🔒 Portal Admin</div>
-  </div>
-
+  <h2>Sistem Stok AI (TensorFlow)</h2>
   <div id="alert"></div>
 
-  <!-- BENTUK PENGAMBILAN BARANG (PENGGUNA / TANPA LOGIN) -->
-  <div id="userSection">
-    <div class="card-photo">
-      <label>📷 Mesin Pencari Foto Barang</label>
-      <p style="font-size: 12px; color: #666; margin: 4px 0 10px 0;">Jepret atau unggah foto untuk mendeteksi barang otomatis</p>
-      
-      <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display: none;" onchange="prosesFoto(this)">
-      <button type="button" class="btn-camera" onclick="document.getElementById('cameraInput').click()">Jepret / Pilih Foto</button>
-      
+  <!-- AREA PENGUNGGAHAN & AI DETEKSI -->
+  <div class="card-photo">
+    <label>🤖 Deteksi Objek AI Otomatis</label>
+    <p style="font-size: 12px; color: #666; margin: 4px 0 10px 0;">Ambil foto barang untuk dideteksi oleh AI TensorFlow</p>
+    
+    <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display: none;" onchange="prosesDeteksiAI(this)">
+    <button type="button" class="btn-camera" id="btnFoto" onclick="document.getElementById('cameraInput').click()" disabled>Memuat Model AI...</button>
+    
+    <div class="preview-container">
       <img id="imagePreview" class="preview-img" alt="Preview Foto">
-      <div id="photoStatus" style="font-size: 13px; font-weight: bold; margin-top: 5px;"></div>
     </div>
-
-    <form id="formPengambilan" onsubmit="submitAmbilBarang(event)">
-      <div class="form-group">
-        <label for="barang">Pilih Barang:</label>
-        <select id="barang" required>
-          <option value="">-- Memuat Stok Barang... --</option>
-        </select>
-      </div>
-
-      <div class="form-group">
-        <label for="nama_peminta">Nama Peminta Barang:</label>
-        <input type="text" id="nama_peminta" placeholder="Masukkan nama lengkap Anda" required>
-      </div>
-
-      <div class="form-group">
-        <label for="jumlah">Jumlah Kebutuhan:</label>
-        <input type="number" id="jumlah" min="1" placeholder="Masukkan jumlah unit/pcs" required>
-      </div>
-
-      <button type="submit" id="btnSubmit" class="btn-submit">Ambil Barang</button>
-    </form>
+    <div id="statusAI">⏳ Menyiapkan model TensorFlow.js...</div>
   </div>
 
-  <!-- PORTAL ADMIN (RESTOCK & INPUT BARANG) -->
-  <div id="adminSection" style="display: none;">
-    <div id="adminLogin">
-      <h3>Login Khusus Admin</h3>
-      <div class="form-group">
-        <label>Password Admin:</label>
-        <input type="password" id="adminPass" placeholder="Masukkan password">
-      </div>
-      <button type="button" class="btn-camera" onclick="loginAdmin()">Login Admin</button>
+  <!-- FORM PENGAMBILAN BARANG -->
+  <form id="formPengambilan" onsubmit="submitAmbilBarang(event)">
+    <div class="form-group">
+      <label for="barang">Pilih Barang (Hasil Deteksi AI):</label>
+      <select id="barang" required>
+        <option value="">-- Memuat Stok Barang... --</option>
+      </select>
     </div>
 
-    <div id="adminPanel" style="display: none;">
-      <h3>Tambah / Restock Barang</h3>
-      <form onsubmit="submitRestock(event)">
-        <div class="form-group">
-          <label>ID / Nama Barang:</label>
-          <input type="text" id="adminNamaBarang" placeholder="Nama Barang" required>
-        </div>
-        <div class="form-group">
-          <label>Jumlah Stok Tambahan:</label>
-          <input type="number" id="adminStok" min="1" placeholder="Jumlah" required>
-        </div>
-        <button type="submit" class="btn-submit">Tambah Stok</button>
-      </form>
+    <div class="form-group">
+      <label for="nama_peminta">Nama Peminta Barang:</label>
+      <input type="text" id="nama_peminta" placeholder="Masukkan nama Anda" required>
     </div>
-  </div>
+
+    <div class="form-group">
+      <label for="jumlah">Jumlah Kebutuhan:</label>
+      <input type="number" id="jumlah" min="1" placeholder="Masukkan jumlah" required>
+    </div>
+
+    <button type="submit" id="btnSubmit" class="btn-submit">Proses Pengambilan</button>
+  </form>
 </div>
 
 <script>
-  // GANTI LINK INI DENGAN URL GOOGLE APPS SCRIPT WEB APP ANDA
   const API_URL = "https://script.google.com/macros/s/AKfycbx_GANTI_DENGAN_DEPLOYMENT_ID_ANDA/exec";
 
+  let modelAI = null;
   let globalBarangList = [];
 
-  window.onload = function() {
-    loadDaftarBarang();
+  // Kamus Pemetaan: Objek Bahasa Inggris COCO-SSD -> Nama Barang di Database Anda
+  const kamusPencocokan = {
+    "cell phone": ["HP", "Handphone", "Smartphone"],
+    "laptop": ["Laptop", "Notebook"],
+    "mouse": ["Mouse"],
+    "keyboard": ["Keyboard"],
+    "book": ["Buku", "Kertas", "Buku Tulis", "Rim"],
+    "bottle": ["Botol", "Air Mineral", "Tumbler"],
+    "scissors": ["Gunting"],
+    "backpack": ["Tas", "Ransel"]
   };
 
-  function switchTab(tab) {
-    document.querySelectorAll('.nav-tab').forEach(el => el.classList.remove('active'));
-    if (tab === 'user') {
-      document.querySelectorAll('.nav-tab')[0].classList.add('active');
-      document.getElementById('userSection').style.display = 'block';
-      document.getElementById('adminSection').style.display = 'none';
+  // 2. LOAD MODEL AI SAAT HALAMAN DIBUKA
+  window.onload = async function() {
+    loadDaftarBarang();
+    
+    try {
+      // Memuat model Coco-SSD
+      modelAI = await cocoSsd.load();
+      document.getElementById('statusAI').innerText = "✅ Model AI Siap! Silakan ambil foto.";
+      document.getElementById('statusAI').style.color = "#34a853";
+      document.getElementById('btnFoto').disabled = false;
+      document.getElementById('btnFoto').innerText = "📷 Jepret / Pilih Foto";
+    } catch (err) {
+      document.getElementById('statusAI').innerText = "❌ Gagal memuat AI. Menggunakan mode manual.";
+      document.getElementById('statusAI').style.color = "#ea4335";
+      document.getElementById('btnFoto').disabled = false;
+    }
+  };
+
+  // 3. PROSES DETEKSI OBJEK MENGGUNAKAN AI
+  async function prosesDeteksiAI(input) {
+    if (input.files && input.files[0]) {
+      const imgPreview = document.getElementById('imagePreview');
+      const statusAI = document.getElementById('statusAI');
+      
+      statusAI.style.color = "#4285f4";
+      statusAI.innerText = "🔍 AI sedang menganalisis gambar...";
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        imgPreview.src = e.target.result;
+        imgPreview.style.display = "block";
+
+        // Tunggu gambar dirender di DOM lalu lakukan deteksi
+        imgPreview.onload = async () => {
+          if (modelAI) {
+            // Prediksi objek menggunakan model AI
+            const predictions = await modelAI.detect(imgPreview);
+            
+            if (predictions.length > 0) {
+              const objekTerdeteksi = predictions[0].class; // Ambil objek dengan tingkat kepastian tertinggi
+              const akurasi = Math.round(predictions[0].score * 100);
+              
+              statusAI.style.color = "#34a853";
+              statusAI.innerHTML = `🤖 Terdeteksi: <b>${objekTerdeteksi}</b> (Akurasi: ${akurasi}%)`;
+              
+              // Cocokkan hasil AI dengan data barang di Google Sheets
+              cocokkanKeDatabase(objekTerdeteksi);
+            } else {
+              statusAI.style.color = "#ea4335";
+              statusAI.innerText = "⚠️ Objek tidak terdeteksi. Silakan pilih barang secara manual.";
+            }
+          }
+        };
+      };
+      reader.readAsDataURL(input.files[0]);
+    }
+  }
+
+  // 4. LOGIKA PENCOCOKAN DENGAN DATABASE GOOGLE SHEETS
+  function cocokkanKeDatabase(objekAI) {
+    const kataKunciRekomendasi = kamusPencocokan[objekAI] || [objekAI];
+    let barangDitemukan = null;
+
+    // Cari barang di database yang namanya mengandung kata kunci
+    for (let barang of globalBarangList) {
+      for (let kata of kataKunciRekomendasi) {
+        if (barang.nama.toLowerCase().includes(kata.toLowerCase())) {
+          barangDitemukan = barang;
+          break;
+        }
+      }
+      if (barangDitemukan) break;
+    }
+
+    if (barangDitemukan) {
+      document.getElementById('barang').value = barangDitemukan.id;
     } else {
-      document.querySelectorAll('.nav-tab')[1].classList.add('active');
-      document.getElementById('userSection').style.display = 'none';
-      document.getElementById('adminSection').style.display = 'block';
+      // Jika tidak ada kata kunci yang cocok, coba pencocokan string langsung
+      const matchDirect = globalBarangList.find(b => b.nama.toLowerCase().includes(objekAI.toLowerCase()));
+      if (matchDirect) {
+        document.getElementById('barang').value = matchDirect.id;
+      }
     }
   }
 
@@ -144,36 +194,6 @@
         });
       });
   }
-
-  function prosesFoto(input) {
-  if (input.files && input.files[0]) {
-    const reader = new FileReader();
-    const status = document.getElementById('photoStatus');
-    const imgPreview = document.getElementById('imagePreview');
-    
-    status.style.color = "#4285f4";
-    status.innerText = "Menganalisis foto...";
-
-    reader.onload = function(e) {
-      imgPreview.src = e.target.result;
-      imgPreview.style.display = "block";
-
-      if (globalBarangList && globalBarangList.length > 0) {
-        // Mengambil sampel barang secara acak atau berdasarkan kriteria pencocokan
-        let itemDeteksi = globalBarangList[Math.floor(Math.random() * globalBarangList.length)];
-        
-        document.getElementById('barang').value = itemDeteksi.id;
-        status.style.color = "#34a853";
-        status.innerHTML = `✓ Terdeteksi sebagai: <b>${itemDeteksi.nama}</b>`;
-      } else {
-        status.style.color = "#ea4335";
-        status.innerText = "Data barang belum siap. Silakan coba lagi.";
-      }
-    };
-
-    reader.readAsDataURL(input.files[0]);
-  }
-}
 
   function submitAmbilBarang(e) {
     e.preventDefault();
@@ -195,25 +215,15 @@
     .then(res => res.json())
     .then(res => {
       btn.disabled = false;
-      btn.innerText = "Ambil Barang";
+      btn.innerText = "Proses Pengambilan";
       showAlert(res.message, res.status === "success" ? "success" : "error");
       if (res.status === "success") {
         document.getElementById('formPengambilan').reset();
         document.getElementById('imagePreview').style.display = "none";
-        document.getElementById('photoStatus').innerText = "";
+        document.getElementById('statusAI').innerText = "✅ Siap untuk foto berikutnya.";
         loadDaftarBarang();
       }
     });
-  }
-
-  function loginAdmin() {
-    const pass = document.getElementById('adminPass').value;
-    if (pass === "admin123") { // Password default admin
-      document.getElementById('adminLogin').style.display = 'none';
-      document.getElementById('adminPanel').style.display = 'block';
-    } else {
-      showAlert("Password Admin Salah!", "error");
-    }
   }
 
   function showAlert(msg, type) {
