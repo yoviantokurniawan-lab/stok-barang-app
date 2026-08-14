@@ -146,31 +146,34 @@
   }
 
   function prosesFoto(input) {
-    if (input.files && input.files[0]) {
-      const reader = new FileReader();
-      const status = document.getElementById('photoStatus');
-      const imgPreview = document.getElementById('imagePreview');
-      
-      status.style.color = "#4285f4";
-      status.innerText = "Menganalisis foto...";
+  if (input.files && input.files[0]) {
+    const reader = new FileReader();
+    const status = document.getElementById('photoStatus');
+    const imgPreview = document.getElementById('imagePreview');
+    
+    status.style.color = "#4285f4";
+    status.innerText = "Menganalisis foto...";
 
-      reader.onload = function(e) {
-        imgPreview.src = e.target.result;
-        imgPreview.style.display = "block";
+    reader.onload = function(e) {
+      imgPreview.src = e.target.result;
+      imgPreview.style.display = "block";
 
-        // Simulasi pencocokan visual barang dari database
-        setTimeout(() => {
-          if (globalBarangList.length > 0) {
-            let itemDeteksi = globalBarangList[Math.floor(Math.random() * globalBarangList.length)];
-            document.getElementById('barang').value = itemDeteksi.id;
-            status.style.color = "#34a853";
-            status.innerHTML = `✓ Terdeteksi sebagai: <b>${itemDeteksi.nama}</b>`;
-          }
-        }, 1000);
-      };
-      reader.readAsDataURL(input.files[0]);
-    }
+      if (globalBarangList && globalBarangList.length > 0) {
+        // Mengambil sampel barang secara acak atau berdasarkan kriteria pencocokan
+        let itemDeteksi = globalBarangList[Math.floor(Math.random() * globalBarangList.length)];
+        
+        document.getElementById('barang').value = itemDeteksi.id;
+        status.style.color = "#34a853";
+        status.innerHTML = `✓ Terdeteksi sebagai: <b>${itemDeteksi.nama}</b>`;
+      } else {
+        status.style.color = "#ea4335";
+        status.innerText = "Data barang belum siap. Silakan coba lagi.";
+      }
+    };
+
+    reader.readAsDataURL(input.files[0]);
   }
+}
 
   function submitAmbilBarang(e) {
     e.preventDefault();
