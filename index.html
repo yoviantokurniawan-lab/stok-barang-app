@@ -77,162 +77,77 @@
 </div>
 
 <script>
-  const API_URL = "https://script.google.com/macros/s/AKfycbwDB5l67T_I6Yw3jXv3KYL1dfqi2CaWHwP5tVxVy-L6sKuO0S83mt5nRcIGzZBTIzA9oQ/exec";
+ const API_URL = "https://script.google.com/macros/s/AKfycbzobuVg-ieEQg3NApJ2jmCgd03edrtUS51uSWpVssi3TsLNXNUheLHAfrGs9lOLBp1gIA/exec";
 
-  let modelAI = null;
-  let globalBarangList = [];
-
-  // Kamus Pemetaan: Objek Bahasa Inggris COCO-SSD -> Nama Barang di Database Anda
-  const kamusPencocokan = {
-    "cell phone": ["HP", "Handphone", "Smartphone"],
-    "laptop": ["Laptop", "Notebook"],
-    "mouse": ["Mouse"],
-    "keyboard": ["Keyboard"],
-    "book": ["Buku", "Kertas", "Buku Tulis", "Rim"],
-    "bottle": ["Botol", "Air Mineral", "Tumbler"],
-    "scissors": ["Gunting"],
-    "backpack": ["Tas", "Ransel"]
-  };
-
-  // 2. LOAD MODEL AI SAAT HALAMAN DIBUKA
-  window.onload = async function() {
-    loadDaftarBarang();
+function loadDaftarBarang() {
+  fetch(API_URL + "?action=getBarang", {
+    method: "GET",
+    redirect: "follow"
+  })
+  .then(res => {
+    if (!res.ok) throw new Error("Gagal terhubung ke API Google Sheets");
+    return res.json();
+  })
+  .then(data => {
+    globalBarangList = data;
+    let select = document.getElementById('barang');
+    select.innerHTML = '<option value="">-- Pilih Barang --</option>';
     
-    try {
-      // Memuat model Coco-SSD
-      modelAI = await cocoSsd.load();
-      document.getElementById('statusAI').innerText = "✅ Model AI Siap! Silakan ambil foto.";
-      document.getElementById('statusAI').style.color = "#34a853";
-      document.getElementById('btnFoto').disabled = false;
-      document.getElementById('btnFoto').innerText = "📷 Jepret / Pilih Foto";
-    } catch (err) {
-      document.getElementById('statusAI').innerText = "❌ Gagal memuat AI. Menggunakan mode manual.";
-      document.getElementById('statusAI').style.color = "#ea4335";
-      document.getElementById('btnFoto').disabled = false;
+    if (data.length === 0) {
+      select.innerHTML = '<option value="">-- Data Barang Kosong --</option>';
+      return;
     }
+
+    data.forEach(item => {
+      let opt = document.createElement('option');
+      opt.value = item.id;
+      opt.text = `${item.nama} (Sisa Stok: ${item.stok} ${item.satuan})`;
+      select.appendChild(opt);
+    });
+  })
+  .catch(err => {
+    console.error("Error Load Barang:", err);
+    let select = document.getElementById('barang');
+    select.innerHTML = '<option value="">❌ Gagal memuat stok (CORS / Server Error)</option>';
+  });
+}
+
+function submitAmbilBarang(e) {
+  e.preventDefault();
+  const btn = document.getElementById('btnSubmit');
+  btn.disabled = true;
+  btn.innerText = "Memproses...";
+
+  const payload = {
+    action: "ambilBarang",
+    idBarang: document.getElementById('barang').value,
+    namaPeminta: document.getElementById('nama_peminta').value,
+    jumlah: document.getElementById('jumlah').value
   };
 
-  // 3. PROSES DETEKSI OBJEK MENGGUNAKAN AI
-  async function prosesDeteksiAI(input) {
-    if (input.files && input.files[0]) {
-      const imgPreview = document.getElementById('imagePreview');
-      const statusAI = document.getElementById('statusAI');
-      
-      statusAI.style.color = "#4285f4";
-      statusAI.innerText = "🔍 AI sedang menganalisis gambar...";
-
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        imgPreview.src = e.target.result;
-        imgPreview.style.display = "block";
-
-        // Tunggu gambar dirender di DOM lalu lakukan deteksi
-        imgPreview.onload = async () => {
-          if (modelAI) {
-            // Prediksi objek menggunakan model AI
-            const predictions = await modelAI.detect(imgPreview);
-            
-            if (predictions.length > 0) {
-              const objekTerdeteksi = predictions[0].class; // Ambil objek dengan tingkat kepastian tertinggi
-              const akurasi = Math.round(predictions[0].score * 100);
-              
-              statusAI.style.color = "#34a853";
-              statusAI.innerHTML = `🤖 Terdeteksi: <b>${objekTerdeteksi}</b> (Akurasi: ${akurasi}%)`;
-              
-              // Cocokkan hasil AI dengan data barang di Google Sheets
-              cocokkanKeDatabase(objekTerdeteksi);
-            } else {
-              statusAI.style.color = "#ea4335";
-              statusAI.innerText = "⚠️ Objek tidak terdeteksi. Silakan pilih barang secara manual.";
-            }
-          }
-        };
-      };
-      reader.readAsDataURL(input.files[0]);
-    }
-  }
-
-  // 4. LOGIKA PENCOCOKAN DENGAN DATABASE GOOGLE SHEETS
-  function cocokkanKeDatabase(objekAI) {
-    const kataKunciRekomendasi = kamusPencocokan[objekAI] || [objekAI];
-    let barangDitemukan = null;
-
-    // Cari barang di database yang namanya mengandung kata kunci
-    for (let barang of globalBarangList) {
-      for (let kata of kataKunciRekomendasi) {
-        if (barang.nama.toLowerCase().includes(kata.toLowerCase())) {
-          barangDitemukan = barang;
-          break;
-        }
-      }
-      if (barangDitemukan) break;
-    }
-
-    if (barangDitemukan) {
-      document.getElementById('barang').value = barangDitemukan.id;
-    } else {
-      // Jika tidak ada kata kunci yang cocok, coba pencocokan string langsung
-      const matchDirect = globalBarangList.find(b => b.nama.toLowerCase().includes(objekAI.toLowerCase()));
-      if (matchDirect) {
-        document.getElementById('barang').value = matchDirect.id;
-      }
-    }
-  }
-
-  function loadDaftarBarang() {
-    fetch(API_URL + "?action=getBarang")
-      .then(res => res.json())
-      .then(data => {
-        globalBarangList = data;
-        let select = document.getElementById('barang');
-        select.innerHTML = '<option value="">-- Pilih Barang --</option>';
-        data.forEach(item => {
-          let opt = document.createElement('option');
-          opt.value = item.id;
-          opt.text = `${item.nama} (Sisa Stok: ${item.stok} ${item.satuan})`;
-          select.appendChild(opt);
-        });
-      });
-  }
-
-  function submitAmbilBarang(e) {
-    e.preventDefault();
-    const btn = document.getElementById('btnSubmit');
-    btn.disabled = true;
-    btn.innerText = "Memproses...";
-
-    const payload = {
-      action: "ambilBarang",
-      idBarang: document.getElementById('barang').value,
-      namaPeminta: document.getElementById('nama_peminta').value,
-      jumlah: document.getElementById('jumlah').value
-    };
-
-    fetch(API_URL, {
-      method: "POST",
-      body: JSON.stringify(payload)
-    })
-    .then(res => res.json())
-    .then(res => {
-      btn.disabled = false;
-      btn.innerText = "Proses Pengambilan";
-      showAlert(res.message, res.status === "success" ? "success" : "error");
-      if (res.status === "success") {
-        document.getElementById('formPengambilan').reset();
-        document.getElementById('imagePreview').style.display = "none";
-        document.getElementById('statusAI').innerText = "✅ Siap untuk foto berikutnya.";
-        loadDaftarBarang();
-      }
-    });
-  }
-
-  function showAlert(msg, type) {
-    const alertBox = document.getElementById('alert');
-    alertBox.className = type;
-    alertBox.innerText = msg;
-    alertBox.style.display = "block";
-    setTimeout(() => { alertBox.style.display = "none"; }, 4000);
-  }
+  fetch(API_URL, {
+    method: "POST",
+    mode: "no-cors", // Mengabaikan kendala CORS saat pengiriman data transaksi
+    headers: {
+      "Content-Type": "text/plain"
+    },
+    body: JSON.stringify(payload)
+  })
+  .then(() => {
+    btn.disabled = false;
+    btn.innerText = "Proses Pengambilan";
+    showAlert("Permintaan berhasil dikirim ke database!", "success");
+    document.getElementById('formPengambilan').reset();
+    
+    // Refresh sisa stok barang
+    setTimeout(loadDaftarBarang, 1500);
+  })
+  .catch(err => {
+    btn.disabled = false;
+    btn.innerText = "Proses Pengambilan";
+    showAlert("Gagal memproses transaksi.", "error");
+  });
+}
 </script>
 
 </body>
