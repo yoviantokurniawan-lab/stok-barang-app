@@ -77,76 +77,36 @@
 </div>
 
 <script>
- const API_URL = "https://script.google.com/macros/s/AKfycbzobuVg-ieEQg3NApJ2jmCgd03edrtUS51uSWpVssi3TsLNXNUheLHAfrGs9lOLBp1gIA/exec";
+ const API_URL = "https://script.google.com/macros/s/AKfycbwDB5l67T_I6Yw3jXv3KYL1dfqi2CaWHwP5tVxVy-L6sKuO0S83mt5nRcIGzZBTIzA9oQ/exec";
 
-function loadDaftarBarang() {
-  fetch(API_URL + "?action=getBarang", {
-    method: "GET",
-    redirect: "follow"
-  })
-  .then(res => {
-    if (!res.ok) throw new Error("Gagal terhubung ke API Google Sheets");
-    return res.json();
-  })
-  .then(data => {
-    globalBarangList = data;
-    let select = document.getElementById('barang');
-    select.innerHTML = '<option value="">-- Pilih Barang --</option>';
-    
-    if (data.length === 0) {
-      select.innerHTML = '<option value="">-- Data Barang Kosong --</option>';
-      return;
-    }
+// Callback fungsi yang dipanggil otomatis oleh JSONP
+function handleBarangResponse(data) {
+  globalBarangList = data;
+  let select = document.getElementById('barang');
+  select.innerHTML = '<option value="">-- Pilih Barang --</option>';
 
-    data.forEach(item => {
-      let opt = document.createElement('option');
-      opt.value = item.id;
-      opt.text = `${item.nama} (Sisa Stok: ${item.stok} ${item.satuan})`;
-      select.appendChild(opt);
-    });
-  })
-  .catch(err => {
-    console.error("Error Load Barang:", err);
-    let select = document.getElementById('barang');
-    select.innerHTML = '<option value="">❌ Gagal memuat stok (CORS / Server Error)</option>';
+  if (!data || data.length === 0) {
+    select.innerHTML = '<option value="">-- Data Barang Kosong --</option>';
+    return;
+  }
+
+  data.forEach(item => {
+    let opt = document.createElement('option');
+    opt.value = item.id;
+    opt.text = `${item.nama} (Sisa Stok: ${item.stok} ${item.satuan})`;
+    select.appendChild(opt);
   });
 }
 
-function submitAmbilBarang(e) {
-  e.preventDefault();
-  const btn = document.getElementById('btnSubmit');
-  btn.disabled = true;
-  btn.innerText = "Memproses...";
+// Fungsi load barang menggunakan teknik JSONP (Bebas Kendala CORS)
+function loadDaftarBarang() {
+  const oldScript = document.getElementById('jsonp-script');
+  if (oldScript) oldScript.remove();
 
-  const payload = {
-    action: "ambilBarang",
-    idBarang: document.getElementById('barang').value,
-    namaPeminta: document.getElementById('nama_peminta').value,
-    jumlah: document.getElementById('jumlah').value
-  };
-
-  fetch(API_URL, {
-    method: "POST",
-    mode: "no-cors", // Mengabaikan kendala CORS saat pengiriman data transaksi
-    headers: {
-      "Content-Type": "text/plain"
-    },
-    body: JSON.stringify(payload)
-  })
-  .then(() => {
-    btn.disabled = false;
-    btn.innerText = "Proses Pengambilan";
-    showAlert("Permintaan berhasil dikirim ke database!", "success");
-    document.getElementById('formPengambilan').reset();
-    
-    // Refresh sisa stok barang
-    setTimeout(loadDaftarBarang, 1500);
-  })
-  .catch(err => {
-    btn.disabled = false;
-    btn.innerText = "Proses Pengambilan";
-    showAlert("Gagal memproses transaksi.", "error");
-  });
+  const script = document.createElement('script');
+  script.id = 'jsonp-script';
+  script.src = API_URL + "?action=getBarang&callback=handleBarangResponse";
+  document.body.appendChild(script);
 }
 </script>
 
